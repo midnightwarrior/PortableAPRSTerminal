@@ -30,7 +30,7 @@
 // menu system a little bit.
 // I'm trying to get $GPGSV stuff out by mallocing a dynamic 2d array.  It's not working currently :(
 
-char versionNumber[11] = "v15.01b15a";
+char versionNumber[11] = "v15.01b19a";
 
 // Formula for delay: Tdelay = (Fpb) * 256 * DELAY
 
