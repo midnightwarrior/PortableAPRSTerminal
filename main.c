@@ -3,7 +3,7 @@
  * Author: midnightwarrior
  *
  * Created on 10 November 2014, 12:50 AM
- * This version v15.01b05a
+ * This version v15.01b26a
  */
 
 #include <xc.h>
@@ -12,9 +12,12 @@
 #include <p32xxxx.h>
 #include <plib.h>
 #include <math.h>
-#include "font.h"
 #include <string.h>
 #include <assert.h>
+
+#include "font.h"
+#include "pindefs.h"
+#include "variableDefs.h"
 
 // W00t! The graphics code *mostly* works! The two simultaneous pixel writes issue has been
 // fixed, but something funky is going on with positioning.
@@ -29,208 +32,22 @@
 // Expanding the NMEA parser so I can pull out all of the information I need, and developing the 
 // menu system a little bit.
 // I'm trying to get $GPGSV stuff out by mallocing a dynamic 2d array.  It's not working currently :(
+// EDIT:  v15.01b21a statically assigns the satellite array - malloc seems too fraught with dragons and fire to be of use.
 
-char versionNumber[11] = "v15.01b19a";
+// CURRENTLY WORKING ON - SNR display chart - SNRs are parsed, they just hide for some reason
+// Otherwise the chart looks nice! - apart from the same satellite being parsed twice, which needs
+// further investigation (not clearing memory after finished with it?)
+
+char versionNumber[11] = "v15.01b26a";
 
 // Formula for delay: Tdelay = (Fpb) * 256 * DELAY
-
-// Pin definitions for the Maximite
-
-/* Maximite|GPIO Pin
-_____________________
-  Pin 1 | RB4 | 12 | DI
-  Pin 2 | RB3 | 13 | EN
-  Pin 3 | RB6 | 17 | CS1
-  Pin 4 | RB7 | 18 | CS2
-  Pin 5 | RB9 | 22 | RST
-  Pin 6 | RB10 | 23
-  Pin 7 | RB11 | 24 |
-  Pin 8 | RB12 | 27 |
-  Pin 9 | RB13 | 28 |
- Pin 10 | RB15 | 30 | RW
- Pin 11 | RD8  | 42 | DB7 *
- Pin 12 | RD9  | 43 | DB1 *
- Pin 13 | RD10 | 44 | DB3 *
- Pin 14 | RD11 | 45 | DB6 *
- Pin 15 | RE2  | 62 | DB4 *
- Pin 16 | RE3  | 63 | DB2 *
- Pin 17 | RE4  | 64 | DB0 *
- Pin 18 | RE5  | 1  | DB5 *
- Pin 19 | RE6  | 2
- Pin 20 | RE7  | 3
- */
-
-/* U(S)ART - finding!
- 
- - I need 2 U(S)ARTs - one is available on the standard Maximite pinout, and
-   one is available on SD card header
- 
- Available pins for possible USART?
-
-VIDEO - SDO2A - 6 - U3TX
-VERT SYNC - RF1 - 59 - 
-SELECT COMPOSITE - RC14 - 48
-SOUND - OC2 - 49 - U4TX
-Kbd clock/data - RD6/7 - 54/55
-
-Card enable - RE0 - 60
-Data > card - SDO4 - 32 - U2TX
-Clk > card - SCK4 - 29 - U5TX
-Data < card - SDI4 - 31 - U2RX
-Card present - RD4 - 52 - 
-Card write protect - RD5 - 53
-SD activity - RE1 - 61
-
-Solution! - Use SD card iface - 31&32 - RX/TX
- * Debug interface is U3TX
- *
- * User input - switch is on RC13
- 
- */
 
 // PreProcessors
 #define SYS_FREQ            (80000000L)                     // 80MHz system clock
 #define CORE_TICK_RATE	    (40)                            // Core ticks at 1MHz - that's a 1us delay!
 
-// Define pins!
-
-// Special function pins
-
-// Make my life much easier
-#define OUT 0
-#define IN 1
-
-#define PowerLED_DIR TRISFbits.TRISF0
-#define PowerLED LATFbits.LATF0
-
-#define RST_DIR TRISDbits.TRISD6
-#define RST LATDbits.LATD6
-#define CS1_DIR TRISBbits.TRISB6
-#define CS1 LATBbits.LATB6
-#define DB6_DIR TRISDbits.TRISD11
-#define DB6 LATDbits.LATD11
-
-#define DB4_DIR TRISEbits.TRISE2
-#define DB4 LATEbits.LATE2
-#define DB2_DIR TRISEbits.TRISE3
-#define DB2 LATEbits.LATE3
-#define DB0_DIR TRISEbits.TRISE4
-#define DB0 LATEbits.LATE4
-#define RW_DIR TRISBbits.TRISB15
-#define RW LATBbits.LATB15
-
-#define EN_DIR TRISBbits.TRISB3
-#define EN LATBbits.LATB3
-#define DI_DIR TRISBbits.TRISB4  //the RS pin
-#define DI LATBbits.LATB4
-#define DB1_DIR TRISDbits.TRISD9
-#define DB1 LATDbits.LATD9
-#define DB3_DIR TRISDbits.TRISD10
-#define DB3 LATDbits.LATD10
-#define DB5_DIR TRISEbits.TRISE5
-#define DB5 LATEbits.LATE5
-#define DB7_DIR TRISDbits.TRISD8
-#define DB7 LATDbits.LATD8
-#define CS2_DIR TRISBbits.TRISB7
-#define CS2 LATBbits.LATB7
-
-#define DB0_Read PORTEbits.RE4
-#define DB1_Read PORTDbits.RD9
-#define DB2_Read PORTEbits.RE3
-#define DB3_Read PORTDbits.RD10
-#define DB4_Read PORTEbits.RE2
-#define DB5_Read PORTEbits.RE5
-#define DB6_Read PORTDbits.RD11
-#define DB7_Read PORTDbits.RD8
-
-// Use change notification stuff (CNx) for this
-// RC13 goes to CN0
-#define ButtonPress PORTCbits.RC13
-#define ButtonPressDir TRISCbits.TRISC13 = IN
-
 #define PI 3.141592653589793
-
-// Set GPS baudrate - this is UART2
-// Set up GPS input and output pins
-#define GPSRX_DIR TRISFbits.TRISF4
-#define GPSRX PORTFbits.RF4
-#define GPSTX_DIR TRISFbits.TRISF5
-#define GPSTX PORTFbits.RF5
-
-#define DEBUGTX_DIR TRISGbits.TRISG8
-#define DEBUGTX PORTGbits.RG8
-
 #define GPS_BaudRate 9600
-
-//This is the string that will hold the data sentence from the GPS
-char NMEAString[82];
-char rxbuffer[82];
-int GPSDataReady = 0;
-int GPSBufferPos = 0;
-int GPSDataReading = 0;
-
-#define QUEUE_SIZE 128
-typedef struct   // C method of creating new types
-{
-	char a[QUEUE_SIZE];
-	int start;
-	int end;
-} Queue;
-
-Queue RXQ, TXQ;
-
-BYTE screenRefreshTimerPeriod = 0;
-BYTE screenPage = 0;
-BYTE loadNewScreenPage = 0;
-BYTE numberOfScreenPages = 3;
-
-char time[3][3];
-char date[3][3];
-float latitude[2];
-float longitude[2];
-
-
-int fixquality = 0;
-int numberOfSatellites = 0;
-
-int** satellitesInView;
-
-
-
-long satellitesInViewLength = 0;
-
-
-// Accuracy/precision
-float hdop = 0;
-float pdop = 0;
-float vdop = 0;
-
-float altitude_msl = 0;
-float altitude_wgs84 = 0;
-float speed = 0;
-float coursemadegood = 0;
-float mag_variation = 0;
-int fixmode = 0;
-
-BYTE time_Changed = 0;
-BYTE date_Changed = 0;
-BYTE latitude_Changed = 0;
-BYTE longitude_Changed = 0;
-BYTE fixquality_Changed = 0;
-BYTE numberOfSatellites_Changed = 0;
-BYTE hdop_Changed = 0;
-BYTE pdop_Changed = 0;
-BYTE vdop_Changed = 0;
-BYTE altitude_msl_Changed = 0;
-BYTE altitude_wgs84_Changed = 0;
-BYTE speed_Changed = 0;
-BYTE coursemadegood_Changed = 0;
-BYTE mag_variation_Changed = 0;
-BYTE fixmode_Changed = 0;
-BYTE satellitesInView_Changed = 0;
-
-// Don't do anything about $GPGSV at the mo - define a struct or something?
-
 
 
 // Function prototypes
@@ -257,12 +74,6 @@ int is_uart_data_ready(void);
 char uart_getchar(void);
 char** str_split(char* , const char);
 char * strtok_single (char *, char const *);
-
-
-
-BYTE instructionCount = 0x00;
-int fooCounter = 0;
-char str[15];
 
 void init(void) {
     // Initialises the PIC32's GPIOs
@@ -373,20 +184,12 @@ int main(void) {
     Set_Start_Line(0);
 
     // Initialise satellites in view array
-    satellitesInView = malloc(sizeof *satellitesInView * 4);
+    //satellitesInView = malloc(sizeof *satellitesInView * 4);
 
     printf("PortableAPRS unit starting...\r\n");
 
     loadScreenPage();
-//GLCD_RenderText(0,0,"UTC:");
-//GLCD_RenderText(12+31, 0, ":");
-//GLCD_RenderText(30+31, 0, ":");
-//GLCD_RenderText(0,8,"Date:");
-//GLCD_RenderText(12+31, 8, "/");
-//GLCD_RenderText(30+31, 8, "/");
-//GLCD_RenderText(0,16,"Lat:");
-//GLCD_RenderText(0,24,"LonG:");
-//GLCD_RenderText(0,32,"Sats:");
+
     while(1) {
         GPSBufferPos = 0;
         while(GPSDataReady == 0) {
@@ -413,16 +216,11 @@ int main(void) {
                     if(is_uart_data_ready()) {
                         rxbuffer[GPSBufferPos] = uart_getchar();
                         GPSBufferPos++;
-                        //printf("Bam!\r\n");
-
-                        //PowerLED = !PowerLED;
                     }
                 }
 
                 GPSDataReady = 1;
                 rxbuffer[GPSBufferPos] = '\0';
-//                printf("***String receiving has ended!\r\n");
-//                printf(rxbuffer);
                 if(NMEAChecksum() == 0) {
                     printf("\r\nChecksum is invalid - clear what's been rxed\r\n\r\n\r\n");
                     GPSDataReady = 0;
@@ -438,7 +236,6 @@ int main(void) {
                 GPSDataReady = 0;
                 GPSBufferPos = 0;
                 memset(rxbuffer, 0, 82);
-                //printf("Start again!\r\n");
     }
     return (EXIT_SUCCESS);
 }
@@ -497,35 +294,58 @@ void loadScreenPage(void) {
         case 3: GLCD_RenderText_writeBytes(0,0,"UTC Time", 1);
                 GLCD_DrawCircle(64, 29, 24, 1);
                 break;
+        case 4: GLCD_DrawCircle(24, 29, 24, 1);
+                break;
+        case 5: GLCD_DrawCircle(24, 29, 24, 1);
+                // Draw SNR graph grid
+                GLCD_DrawLine(64,2,64,20,0);
+                GLCD_DrawLine(64,20,127,20,0);
+                GLCD_DrawLine(64,11,127,11,1);
+                GLCD_RenderText(52,20,"0dB");
+                GLCD_RenderText(52,9,"50");
+                GLCD_RenderText(52,2,"99");
+
+                // Range from 0 - 99dB = 18 pixels
+                // 6 sats per line: 64 pixels so 10 pix each
+                // Lines at y=24, y=48
+                GLCD_DrawLine(64,48,127,48,0);
+                GLCD_DrawLine(64,30,64,48,0);
+                GLCD_DrawLine(64,39,127,39,1);
+                GLCD_RenderText(52,48,"0dB");
+                GLCD_RenderText(52,37,"50");
+                GLCD_RenderText(52,30,"99");
+                break;
+
     }
 }
 
 void displayGPSData(void) {
         char stringFromFloat[50];
+        int x, y;
         switch(screenPage) {
             case 1: if(time_Changed) {
                     time_Changed = 0;
-                    GLCD_RenderText(0+31,0,time[0]);
-                    GLCD_RenderText(18+31, 0, time[1]);
-                    GLCD_RenderText(36+31, 0, time[2]);
+                    GLCD_RenderText_writeBytes(0+31,0,time[0], 1);
+                    GLCD_RenderText_writeBytes(18+31, 0, time[1], 1);
+                    GLCD_RenderText_writeBytes(36+31, 0, time[2], 1);
                 }
 
                     if(date_Changed) {
                         date_Changed = 0;
-                        GLCD_RenderText(0+31,8, date[0]);
-                        GLCD_RenderText(18+31, 8, date[1]);
-                        GLCD_RenderText(36+31, 8, date[2]);
+                        GLCD_RenderText_writeBytes(0+31,1, date[0],1);
+                        GLCD_RenderText_writeBytes(18+31, 1, date[1],1);
+                        GLCD_RenderText_writeBytes(36+31, 1, date[2],1);
                     }
                     if(latitude_Changed) {
                         latitude_Changed = 0;
-                        snprintf(stringFromFloat,16,"%.0f~ %f'",latitude[0],latitude[1]);
+                        snprintf(stringFromFloat,16,"%.0f~ %2.4f'",latitude[0],latitude[1]);
                         GLCD_RenderText_writeBytes(31,2,stringFromFloat,1);
                         printf(stringFromFloat);
                         printf("\r\n");
                     }
                     if(longitude_Changed) {
                         longitude_Changed = 0;
-                        snprintf(stringFromFloat,116,"%.0f~ %f'",longitude[0],longitude[1]);
+                        snprintf(stringFromFloat,116,"%.0f~ %2.4f'",longitude[0],longitude[1]);
                         GLCD_RenderText_writeBytes(31,3,stringFromFloat,1);
                         printf(stringFromFloat);
                         printf("\r\n");
@@ -537,7 +357,7 @@ void displayGPSData(void) {
                     }
                     if(numberOfSatellites_Changed) {
                         numberOfSatellites_Changed = 0;
-                        snprintf(stringFromFloat,3,"%d",numberOfSatellites);
+                        snprintf(stringFromFloat,3,"%d ",numberOfSatellites);
                         GLCD_RenderText_writeBytes(31, 5, stringFromFloat,1);
                 }
             break;
@@ -604,6 +424,80 @@ void displayGPSData(void) {
                     GLCD_DrawLine(64, 29, second_x, second_y, 0);
                 }
                 break;
+            case 4: // Display currently viewable satellites and their SNRs
+
+                if(satellitesInView_Changed) {
+                    GLCD_ON();
+                    GLCD_CLR();
+                    loadScreenPage();
+                    satellitesInView_Changed = 0;
+                    // Display what satellites are in view
+                    for(a=0; a<satellitesInViewLength; a++) {
+//                        y = (int)((float)(24/90)*(sin(satellitesInView[a][2] * PI/180) * (90 - satellitesInView[a][1])) + 32);
+//                        x = (int)((float)(24/90)*(cos(satellitesInView[a][2] * PI/180) * (90 - satellitesInView[a][1])) + 64);
+                        y = 29 + ((90 - satellitesInView[a][1])*sin((270+satellitesInView[a][2])*(PI/180))/4);
+                        x = 24 + ((90 - satellitesInView[a][1])*cos((270+satellitesInView[a][2])*(PI/180))/4);
+
+                        if(satellitesInView[a][0] < 10) {
+                            snprintf(str,3,"0%d",satellitesInView[a][0]);
+                            if(!fixValid) {
+                                snprintf(str,3,"??");
+                            }
+//                            GLCD_RenderText((a-1)*12 % 108, ((int)(((a-1)*12)/108)) * 6, str);
+                            GLCD_RenderText(x, y, str);
+                        }
+                        else {
+                            snprintf(str,3,"%d",satellitesInView[a][0]);
+                            if(!fixValid) {
+                                snprintf(str,3,"??");
+                            }
+//                            GLCD_RenderText((a-1)*12 % 108, ((int)(((a-1)*12)/108)) * 6, str);
+                            GLCD_RenderText(x, y, str);
+                        }
+                    }
+                    snprintf(str,4,"%d",satellitesInViewLength);
+                    GLCD_RenderText(0,56,str);
+                }
+                break;
+            case 5: // Display currently viewable satellites and their SNRs
+
+                if(satellitesInView_Changed) {
+                    GLCD_ON();
+                    GLCD_CLR();
+                    loadScreenPage();
+                    satellitesInView_Changed = 0;
+                    // Display what satellites are in view (and SNRs!)
+                    // Range from 0 - 99dB = 18 pixels
+                    // 6 sats per line: 64 pixels so 10 pix each
+                    // Lines at y=20, y=44
+                    for(a=0; a<satellitesInViewLength; a++) {
+//                        y = (int)((float)(24/90)*(sin(satellitesInView[a][2] * PI/180) * (90 - satellitesInView[a][1])) + 32);
+//                        x = (int)((float)(24/90)*(cos(satellitesInView[a][2] * PI/180) * (90 - satellitesInView[a][1])) + 64);
+                        y = 29 + ((90 - satellitesInView[a][1])*sin((270+satellitesInView[a][2])*(PI/180))/4);
+                        x = 24 + ((90 - satellitesInView[a][1])*cos((270+satellitesInView[a][2])*(PI/180))/4);
+
+                        // Add satellite number to plots
+                        snprintf(str,3,"%d",satellitesInView[a][0]);
+                        if(satellitesInView[a][0] < 10) {
+                             snprintf(str,3,"0%d",satellitesInView[a][0]);
+                        }
+                        GLCD_RenderText(((a % 6 * 10) + 68), 22+((a > 5)*28), str);
+                        // Do SNR bars
+                        //if(satellitesInView[a][3] != 0) {
+                        //}
+                            linelength = 18*((double)satellitesInView[a][3]/100);
+                            printf("Stuff: %d\r\n", (int)linelength);
+                            GLCD_DrawBox(((a % 6 * 10) + 72)-1, 20+((a > 5)*28), ((a % 6 * 10) + 72)+1, 20+((a > 5)*28) - (int)linelength, 1);
+
+
+
+
+                        Draw_Point(x, y, 1);
+                    }
+                    snprintf(str,4,"%d",satellitesInViewLength);
+                    GLCD_RenderText(0,56,str);
+                }
+                break;
         }
 }
 
@@ -613,12 +507,10 @@ void NMEAParser(void) {
     memset(tokens, 0, 50);
     printf(NMEAString);
     printf("\r\n");
-    //strcpy(NMEAString,"$GPRMC,074008.574,V,4050.00,S,17553.57,E,0.00,0.00,090180,,,N*40");
 
     char str[15];
     int tokenPosition = 0;
-//    printf(NMEAString);
-//    printf("\r\n");
+
     // Get first token
     char *temp_token = strtok_single(NMEAString, ",*");
     if(temp_token == NULL) {
@@ -680,6 +572,7 @@ void NMEAParser(void) {
                 int offset = (a*2)+b;
                 time[a][b] = tokens[1][offset];
                 date[a][b] = tokens[9][offset];
+
                 if(time[a][b] != oldTime[a][b]) {
                     time_Changed = 1;
                 }
@@ -692,35 +585,62 @@ void NMEAParser(void) {
             date[a][2] = '\0';
         }
 
-        // Get latitude/longitude and sign it
-        // NOTE!!! - lat and long are returned in ddmm.mmmm format, NOT dddd.dddd
-        float oldLongitude[2];
-        oldLongitude[0] = longitude[0];
-        oldLongitude[1] = longitude[1];
+//            // Check to see if fractional component is above 0.5
+//            int fracSec, tempTime;
+//            snprintf(str, 3, "%d%d", tokens[1][7], tokens[1][8]);
+//            fracSec = atoi(str);
+//            if(fracSec > 50) {
+//                // Round up!
+//                tempTime = atoi(time[3]);
+//                tempTime += 1;
+//                tempTime = tempTime % 60;
+//                snprintf(str, 3, "%d", tempTime);
 
-        float oldLatitude[2];
-        oldLatitude[0] = latitude[0];
-        oldLatitude[1] = latitude[1];
-
-        latitude[0] = (int)strtod(tokens[3], NULL) / 100;
-        latitude[1] = (strtod(tokens[3], NULL) / 100 - latitude[0]) * 100;
-        longitude[0] = (int)strtod(tokens[5], NULL) / 100;
-        longitude[1] = (strtod(tokens[5], NULL) / 100 - longitude[0]) * 100;
-
-        if(tokens[4][0] == 'S') {
-            latitude[0]*= -1;
+        if(tokens[2][0] == 'A') {
+            // Fix is valid!
+            fixValid = 1;
         }
-        if(tokens[6][0] == 'W') {
-            longitude[0]*=-1;
+        else {
+            fixValid = 0;
         }
 
-        if(oldLongitude[0] != longitude[0] || oldLongitude[1] != longitude[1]) {
-            longitude_Changed = 1;
+
+        if(fixValid) {
+            // Get latitude/longitude and sign it
+            // NOTE!!! - lat and long are returned in ddmm.mmmm format, NOT dddd.dddd
+            float oldLongitude[2];
+            oldLongitude[0] = longitude[0];
+            oldLongitude[1] = longitude[1];
+
+            float oldLatitude[2];
+            oldLatitude[0] = latitude[0];
+            oldLatitude[1] = latitude[1];
+
+            latitude[0] = (int)strtod(tokens[3], NULL) / 100;
+            latitude[1] = (strtod(tokens[3], NULL) / 100 - latitude[0]) * 100;
+            longitude[0] = (int)strtod(tokens[5], NULL) / 100;
+            longitude[1] = (strtod(tokens[5], NULL) / 100 - longitude[0]) * 100;
+
+            if(tokens[4][0] == 'S') {
+                latitude[0]*= -1;
+            }
+            if(tokens[6][0] == 'W') {
+                longitude[0]*=-1;
+            }
+
+
+            if(oldLatitude[0] != latitude[0] || oldLatitude[1] != latitude[1]) {
+                latitude_Changed = 1;
+                printf("New latitude! - %f %f\r\n", latitude[0], latitude[1]);
+            }
+
+            if(oldLongitude[0] != longitude[0] || oldLongitude[1] != longitude[1]) {
+                longitude_Changed = 1;
+                printf("New longitude! - %f %f\r\n", longitude[0], longitude[1]);
+            }
         }
-        if(oldLatitude[0] != latitude[0] || oldLatitude[1] != latitude[1]) {
-            latitude_Changed = 1;
-        }
-    }
+}
+    
     else if(strcmp(tokens[0], "$GPGSV") == 0) {
         // String is $GPGSV
         // This contains satellites in view
@@ -739,8 +659,6 @@ void NMEAParser(void) {
         eg. $GPGSV,3,1,11,03,03,111,00,04,15,270,00,06,01,010,00,13,06,292,00*74
             $GPGSV,3,2,11,14,25,170,00,16,57,208,39,18,67,296,40,19,40,246,00*74
             $GPGSV,3,3,11,22,42,067,42,24,14,311,43,27,05,244,00,,,,*4D
-
-
             $GPGSV,1,1,13,02,02,213,,03,-3,000,,11,00,121,,14,13,172,05*67
 
 
@@ -768,14 +686,38 @@ void NMEAParser(void) {
         unsigned int azimuth[4];
         unsigned int snr[4];
         unsigned int messageNumber = atoi(tokens[2]);
+        unsigned int numberOfMessages = atoi(tokens[1]);
 
         int sv, a;
 
         for(sv=0;sv<4;sv++) {
-            svNumber[sv] = atoi(tokens[(sv + 1) * 4]);
-            elevation[sv] = atoi(tokens[((sv + 1) * 4) + 1]);
-            azimuth[sv] = atoi(tokens[((sv + 1) * 4) + 2]);
-            snr[sv] = atoi(tokens[((sv + 1) * 4) + 3]);
+            if(satellitesInViewLength + sv > numberOfSatellites) {
+                //break;
+            }
+            if(tokens[(sv + 1) * 4] != NULL) {
+                svNumber[sv] = atoi(tokens[(sv + 1) * 4]);
+            }
+            else{
+                svNumber[sv] = 0;
+            }
+            if(tokens[((sv + 1) * 4) + 1] != NULL)  {
+                elevation[sv] = atoi(tokens[((sv + 1) * 4) + 1]);
+            }
+            else{
+                elevation[sv] = 0;
+            }
+            if(tokens[((sv + 1) * 4) + 2] != NULL)  {
+                azimuth[sv] = atoi(tokens[((sv + 1) * 4) + 2]);
+            }
+            else{
+                azimuth[sv] = 0;
+            }
+            if(tokens[((sv + 1) * 4) + 3] != NULL)  {
+                snr[sv] = atoi(tokens[((sv + 1) * 4) + 3]);
+            }
+            else{
+                snr[sv] = 0;
+            }
         }
 
         // Cool. Now we have our 'seen' SV list, search through the existing array
@@ -784,16 +726,6 @@ void NMEAParser(void) {
         // If the message number is 1, *clear* the array (edit: not strictly necessary)
         // and shrink it to the number of visible satellites.
         if(messageNumber == 1) {
-            // Kill the array - we're gonna fill it with new values!
-            free(satellitesInView);
-
-            satellitesInView = malloc(sizeof *satellitesInView * 4);
-            if(satellitesInView) {
-                for(a=0;a<4;a++) {
-                    satellitesInView[a] = malloc(sizeof *satellitesInView[a] * numberOfSatellites);
-                }
-                PowerLED = !PowerLED;
-            }
             satellitesInViewLength = 0;
         }
 
@@ -804,13 +736,19 @@ void NMEAParser(void) {
         for(sv=0;sv<4;sv++) {
             if(svNumber[sv] != NULL) {
                 // There's a value here!
+                satellitesInView[satellitesInViewLength][0] = svNumber[sv];
+                satellitesInView[satellitesInViewLength][1] = elevation[sv];
+                satellitesInView[satellitesInViewLength][2] = azimuth[sv];
+                satellitesInView[satellitesInViewLength][3] = snr[sv];
                 satellitesInViewLength += 1;
-//                satellitesInView[0][satellitesInViewLength] = svNumber[sv];
-                
+                printf("Satellite: %d, SNR: %d dB\r\n", svNumber[sv], snr[sv]);
             }
         }
-
-
+        if(numberOfMessages == messageNumber) {
+            // This data has been updated - push it!
+            satellitesInView_Changed = 1;
+            printf("PUSH!\r\n");
+        }
     }
     else if(strcmp(tokens[0], "$GPGSA") == 0) {
         // String is $GPGSA
@@ -877,7 +815,7 @@ int NMEAChecksum(void) {
 void __ISR(_TIMER_2_VECTOR, ipl1) IntTim2Handler(void) {
     //printf("Blink!\r\n");
     if(mT2GetIntFlag()) {
-        if(screenRefreshTimerPeriod == 5) {
+        if(screenRefreshTimerPeriod == screenRefreshRate) {
             displayGPSData();
             screenRefreshTimerPeriod = 0;
 //            printf("DON'T BLINK.\r\n");
@@ -1254,12 +1192,12 @@ void GLCD_RenderText(int init_x, int init_y, char *str) {
 
     // Loop through string and print chars
     while(offset < strlen(str)) {
-        x = offset * 6 + init_x;
+        x = offset * 4 + init_x;
         y = init_y;
         GOTO_XY(x, y);
-        for(a=0; a<5; a++) {
-            for(b=7; b+1>0; b--) {
-                Draw_Point(x + a, y + b, (((font[str[offset] - 0x20][a]) >> b) & 0x01));
+        for(a=0; a<3; a++) {
+            for(b=5; b+1>0; b--) {
+                Draw_Point(x + a, y + b, (((littlenumbers[str[offset] - 0x30][a]) >> b) & 0x01));
             }
         }
         offset++;

@@ -1,3 +1,5 @@
 build/default/production/main.o:  \
 main.c  \
-font.h 
+font.h  \
+pindefs.h  \
+variableDefs.h 

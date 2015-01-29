@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<default>
-  <HarmonyPath path="../../../../opt/microchip/harmony/v1_01"/>
-  <ForceOptimization flag="true"/>
-  <Files/>
-</default>
