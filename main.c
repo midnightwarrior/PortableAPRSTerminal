@@ -3,7 +3,7 @@
  * Author: midnightwarrior
  *
  * Created on 10 November 2014, 12:50 AM
- * This version v15.01b26a
+ * This version v15.01b31a
  */
 
 #include <xc.h>
@@ -38,7 +38,7 @@
 // Otherwise the chart looks nice! - apart from the same satellite being parsed twice, which needs
 // further investigation (not clearing memory after finished with it?)
 
-char versionNumber[11] = "v15.01b26a";
+char versionNumber[11] = "v15.01b31a";
 
 // Formula for delay: Tdelay = (Fpb) * 256 * DELAY
 
@@ -295,15 +295,14 @@ void loadScreenPage(void) {
                 GLCD_DrawCircle(64, 29, 24, 1);
                 break;
         case 4: GLCD_DrawCircle(24, 29, 24, 1);
-                break;
-        case 5: GLCD_DrawCircle(24, 29, 24, 1);
-                // Draw SNR graph grid
+
+        // Draw SNR graph grid
                 GLCD_DrawLine(64,2,64,20,0);
                 GLCD_DrawLine(64,20,127,20,0);
                 GLCD_DrawLine(64,11,127,11,1);
                 GLCD_RenderText(52,20,"0dB");
-                GLCD_RenderText(52,9,"50");
-                GLCD_RenderText(52,2,"99");
+                GLCD_RenderText(56,9,"50");
+                GLCD_RenderText(56,2,"99");
 
                 // Range from 0 - 99dB = 18 pixels
                 // 6 sats per line: 64 pixels so 10 pix each
@@ -312,8 +311,28 @@ void loadScreenPage(void) {
                 GLCD_DrawLine(64,30,64,48,0);
                 GLCD_DrawLine(64,39,127,39,1);
                 GLCD_RenderText(52,48,"0dB");
-                GLCD_RenderText(52,37,"50");
-                GLCD_RenderText(52,30,"99");
+                GLCD_RenderText(56,37,"50");
+                GLCD_RenderText(56,30,"99");
+                break;
+
+        case 5: GLCD_DrawCircle(24, 29, 24, 1);
+                // Draw SNR graph grid
+                GLCD_DrawLine(64,2,64,20,0);
+                GLCD_DrawLine(64,20,127,20,0);
+                GLCD_DrawLine(64,11,127,11,1);
+                GLCD_RenderText(52,20,"0dB");
+                GLCD_RenderText(56,9,"50");
+                GLCD_RenderText(56,2,"99");
+
+                // Range from 0 - 99dB = 18 pixels
+                // 6 sats per line: 64 pixels so 10 pix each
+                // Lines at y=24, y=48
+                GLCD_DrawLine(64,48,127,48,0);
+                GLCD_DrawLine(64,30,64,48,0);
+                GLCD_DrawLine(64,39,127,39,1);
+                GLCD_RenderText(52,48,"0dB");
+                GLCD_RenderText(56,37,"50");
+                GLCD_RenderText(56,30,"99");
                 break;
 
     }
@@ -431,6 +450,7 @@ void displayGPSData(void) {
                     GLCD_CLR();
                     loadScreenPage();
                     satellitesInView_Changed = 0;
+                    satellitesTracked = 0;
                     // Display what satellites are in view
                     for(a=0; a<satellitesInViewLength; a++) {
 //                        y = (int)((float)(24/90)*(sin(satellitesInView[a][2] * PI/180) * (90 - satellitesInView[a][1])) + 32);
@@ -440,22 +460,41 @@ void displayGPSData(void) {
 
                         if(satellitesInView[a][0] < 10) {
                             snprintf(str,3,"0%d",satellitesInView[a][0]);
+
+                            // Add satellite number to plot
+                            if(satellitesInView[a][3] > 0) {
+                            GLCD_RenderText(((satellitesTracked % 6 * 10) + 68), 22+((satellitesTracked > 5)*28), str);
+                                // Do SNR bars
+                                linelength = 18*((double)satellitesInView[a][3]/100);
+                                GLCD_DrawBox(((satellitesTracked % 6 * 10) + 72)-1, 20+((satellitesTracked > 5)*28), ((satellitesTracked % 6 * 10) + 72)+1, 20+((satellitesTracked > 5)*28) - (int)linelength, 1);
+                                satellitesTracked += 1;
+                        }
                             if(!fixValid) {
                                 snprintf(str,3,"??");
                             }
-//                            GLCD_RenderText((a-1)*12 % 108, ((int)(((a-1)*12)/108)) * 6, str);
                             GLCD_RenderText(x, y, str);
+                            //Draw_Point(x,y,1);
                         }
                         else {
                             snprintf(str,3,"%d",satellitesInView[a][0]);
+
+                            // Add satellite number to plot
+                            if(satellitesInView[a][3] > 0) {
+                            GLCD_RenderText(((satellitesTracked % 6 * 10) + 68), 22+((satellitesTracked > 5)*28), str);
+                            // Do SNR bars
+                                linelength = 18*((double)satellitesInView[a][3]/100);
+                                GLCD_DrawBox(((satellitesTracked % 6 * 10) + 72)-1, 20+((satellitesTracked > 5)*28), ((satellitesTracked % 6 * 10) + 72)+1, 20+((satellitesTracked > 5)*28) - (int)linelength, 1);
+                                satellitesTracked += 1;
+                        }
+                            // Make each satellite number a question mark if invalid
                             if(!fixValid) {
                                 snprintf(str,3,"??");
                             }
-//                            GLCD_RenderText((a-1)*12 % 108, ((int)(((a-1)*12)/108)) * 6, str);
                             GLCD_RenderText(x, y, str);
+                            //Draw_Point(x,y,1);
                         }
                     }
-                    snprintf(str,4,"%d",satellitesInViewLength);
+                    snprintf(str,15,"Tracking: %d",satellitesTracked);
                     GLCD_RenderText(0,56,str);
                 }
                 break;
@@ -466,35 +505,34 @@ void displayGPSData(void) {
                     GLCD_CLR();
                     loadScreenPage();
                     satellitesInView_Changed = 0;
+                    satellitesTracked = 0;
                     // Display what satellites are in view (and SNRs!)
                     // Range from 0 - 99dB = 18 pixels
                     // 6 sats per line: 64 pixels so 10 pix each
                     // Lines at y=20, y=44
                     for(a=0; a<satellitesInViewLength; a++) {
-//                        y = (int)((float)(24/90)*(sin(satellitesInView[a][2] * PI/180) * (90 - satellitesInView[a][1])) + 32);
-//                        x = (int)((float)(24/90)*(cos(satellitesInView[a][2] * PI/180) * (90 - satellitesInView[a][1])) + 64);
                         y = 29 + ((90 - satellitesInView[a][1])*sin((270+satellitesInView[a][2])*(PI/180))/4);
                         x = 24 + ((90 - satellitesInView[a][1])*cos((270+satellitesInView[a][2])*(PI/180))/4);
+                        Draw_Point(x, y, 1);
+                        //printf("SN: %d, X: %d, Y: %d\r\n", satellitesInView[a][0],x, y);
 
                         // Add satellite number to plots
                         snprintf(str,3,"%d",satellitesInView[a][0]);
                         if(satellitesInView[a][0] < 10) {
-                             snprintf(str,3,"0%d",satellitesInView[a][0]);
+                             snprintf(str,3,"0%d",
+                                     satellitesInView[a][0]);
                         }
-                        GLCD_RenderText(((a % 6 * 10) + 68), 22+((a > 5)*28), str);
-                        // Do SNR bars
-                        //if(satellitesInView[a][3] != 0) {
-                        //}
-                            linelength = 18*((double)satellitesInView[a][3]/100);
-                            printf("Stuff: %d\r\n", (int)linelength);
-                            GLCD_DrawBox(((a % 6 * 10) + 72)-1, 20+((a > 5)*28), ((a % 6 * 10) + 72)+1, 20+((a > 5)*28) - (int)linelength, 1);
-
-
-
-
-                        Draw_Point(x, y, 1);
+                        if(satellitesInView[a][3] > 0) {
+                            GLCD_RenderText(((satellitesTracked % 6 * 10) + 68), 22+((satellitesTracked > 5)*28), str);
+                            // Do SNR bars
+                            //if(satellitesInView[a][3] != 0) {
+                            //}
+                                linelength = 18*((double)satellitesInView[a][3]/100);
+                                GLCD_DrawBox(((satellitesTracked % 6 * 10) + 72)-1, 20+((satellitesTracked > 5)*28), ((satellitesTracked % 6 * 10) + 72)+1, 20+((satellitesTracked > 5)*28) - (int)linelength, 1);
+                                satellitesTracked += 1;
+                        }
                     }
-                    snprintf(str,4,"%d",satellitesInViewLength);
+                    snprintf(str,4,"%d",satellitesTracked);
                     GLCD_RenderText(0,56,str);
                 }
                 break;
@@ -631,12 +669,12 @@ void NMEAParser(void) {
 
             if(oldLatitude[0] != latitude[0] || oldLatitude[1] != latitude[1]) {
                 latitude_Changed = 1;
-                printf("New latitude! - %f %f\r\n", latitude[0], latitude[1]);
+                //printf("New latitude! - %f %f\r\n", latitude[0], latitude[1]);
             }
 
             if(oldLongitude[0] != longitude[0] || oldLongitude[1] != longitude[1]) {
                 longitude_Changed = 1;
-                printf("New longitude! - %f %f\r\n", longitude[0], longitude[1]);
+                //printf("New longitude! - %f %f\r\n", longitude[0], longitude[1]);
             }
         }
 }
@@ -726,7 +764,14 @@ void NMEAParser(void) {
         // If the message number is 1, *clear* the array (edit: not strictly necessary)
         // and shrink it to the number of visible satellites.
         if(messageNumber == 1) {
+            for(sv=0;sv<32;sv++) {
+                satellitesInView[sv][0] = 0;
+                satellitesInView[sv][1] = 0;
+                satellitesInView[sv][2] = 0;
+                satellitesInView[sv][3] = 0;
+            }
             satellitesInViewLength = 0;
+            satelliteSentencesReceived = 0;
         }
 
         // Iterate through the satellites we just got - then increment satellitesInViewLength by
@@ -741,13 +786,25 @@ void NMEAParser(void) {
                 satellitesInView[satellitesInViewLength][2] = azimuth[sv];
                 satellitesInView[satellitesInViewLength][3] = snr[sv];
                 satellitesInViewLength += 1;
-                printf("Satellite: %d, SNR: %d dB\r\n", svNumber[sv], snr[sv]);
+                //printf("Satellite: %d, SNR: %d dB\r\n", svNumber[sv], snr[sv]);
+            }
+            else {
+                // Nothing to see here, break!
+                break;
             }
         }
+        satelliteSentencesReceived += 1;
         if(numberOfMessages == messageNumber) {
             // This data has been updated - push it!
-            satellitesInView_Changed = 1;
-            printf("PUSH!\r\n");
+            if(satelliteSentencesReceived == numberOfMessages) {
+                satellitesInView_Changed = 1;
+                printf("PUSH!\r\n");
+            }
+            else {
+                printf("Satellite positional data was invalid, held back\r\n");
+                satelliteSentencesReceived = 0;
+                satellitesInView_Changed = 0;
+            }
         }
     }
     else if(strcmp(tokens[0], "$GPGSA") == 0) {
@@ -797,6 +854,7 @@ int NMEAChecksum(void) {
     str_checksum[2] = NULL;
     number_checksum = strtol(str_checksum, NULL, 16);
 
+    printf("Checksum:\r\nCalculated: %d, real: %d\r\n", checksum, number_checksum);
     if(number_checksum == checksum) {
         // Checksum is valid!
 //        printf("Checksum is valid!\r\n");
@@ -1197,7 +1255,7 @@ void GLCD_RenderText(int init_x, int init_y, char *str) {
         GOTO_XY(x, y);
         for(a=0; a<3; a++) {
             for(b=5; b+1>0; b--) {
-                Draw_Point(x + a, y + b, (((littlenumbers[str[offset] - 0x30][a]) >> b) & 0x01));
+                Draw_Point(x + a, y + b, (((littlenumbers[str[offset] - 0x20][a]) >> b) & 0x01));
             }
         }
         offset++;

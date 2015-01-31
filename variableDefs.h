@@ -6,7 +6,7 @@ int GPSBufferPos = 0;
 int GPSDataReading = 0;
 
 double linelength = 0;
-
+int satelliteSentencesReceived = 0;
 
 // Screen refresh rate in multiples of 200ms
 int screenRefreshRate = 5;
@@ -31,6 +31,7 @@ char date[3][3];
 float latitude[2];
 float longitude[2];
 int a;
+int satellitesTracked = 0;
 
 int fixValid = 0;
 int numberOfSatellites = 0;
