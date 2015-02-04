@@ -28,6 +28,39 @@
 
 #include "PIC32GraphicsLibrary_pins.h"
 
+void initLCD(void) {
+    // Initialises the PIC32's GPIOs
+    AD1PCFG = 0xFFFF;
+    CS1_DIR = OUT;
+    CS2_DIR = OUT;
+    RST_DIR = OUT;
+    RW_DIR = OUT;
+    DB0_DIR = OUT;
+    DB1_DIR = OUT;
+    DB2_DIR = OUT;
+    DB3_DIR = OUT;
+    DB4_DIR = OUT;
+    DB5_DIR = OUT;
+    DB6_DIR = OUT;
+    DB7_DIR = OUT;
+    EN_DIR = OUT;
+    DI_DIR = OUT;
+}
+
+void setDataBusAsRead(void) {
+    // Set tristate registers so the LCD's data bus can get read
+    // This function DOESN'T ACTUALLY WORK PROPERLY! - fix!
+    DB0_DIR = IN;
+    DB1_DIR = IN;
+    DB2_DIR = IN;
+    DB3_DIR = IN;
+    DB4_DIR = IN;
+    DB5_DIR = IN;
+    DB6_DIR = IN;
+    DB7_DIR = IN;
+    //PowerLED = DB0_DIR;
+    //delay_us(20000);
+}
 
 void GLCD_DrawLine(unsigned short x0, unsigned short y0, unsigned short x1, unsigned short y1, unsigned short style) {
     // Draw a line on the screen!
@@ -122,6 +155,10 @@ void Enable_Pulse() {
 }
 
 void GLCD_ON() {
+    CS1 = 0;
+    CS2 = 0;
+    RST = 1;
+
     // Switch on both chips
     CS1 = 1;
     CS2 = 1;

@@ -29,15 +29,16 @@
 #include "variableDefs.h"
 #include "prototypes.h"
 #include "PIC32GraphicsLibrary.h"
+#include "PIC32GraphicsLibrary_pins.h"
 
 // Where am I?
-// Expanding the NMEA parser so I can pull out all of the information I need, and developing the 
+// Expanding the NMEA parser so I can pull out all of the information I need, and developing the
 // menu system a little bit.
 // I'm trying to get $GPGSV stuff out by mallocing a dynamic 2d array.  It's not working currently :(
 // EDIT:  v15.01b21a statically assigns the satellite array - malloc seems too fraught with dragons and fire to be of use.
 
 // SET VERSION NUMBER HERE!
-char versionNumber[11] = "v15.02b04a";
+char versionNumber[11] = "v15.02b04b";
 
 void init(void) {
     SYSTEMConfig(SYS_FREQ, SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
@@ -58,25 +59,6 @@ void init(void) {
     // Initialise the GPS!
     initGPS();
     initDebug();
-}
-
-void initLCD(void) {
-    // Initialises the PIC32's GPIOs
-    AD1PCFG = 0xFFFF;
-    CS1_DIR = OUT;
-    CS2_DIR = OUT;
-    RST_DIR = OUT;
-    RW_DIR = OUT;
-    DB0_DIR = OUT;
-    DB1_DIR = OUT;
-    DB2_DIR = OUT;
-    DB3_DIR = OUT;
-    DB4_DIR = OUT;
-    DB5_DIR = OUT;
-    DB6_DIR = OUT;
-    DB7_DIR = OUT;
-    EN_DIR = OUT;
-    DI_DIR = OUT;
 }
 
 void initGPS() {
@@ -103,20 +85,6 @@ void initDebug() {
     UARTEnable(UART3, UART_ENABLE_FLAGS(UART_PERIPHERAL | UART_RX | UART_TX));
 }
 
-void setDataBusAsRead(void) {
-    // Set tristate registers so the LCD's data bus can get read
-    // This function DOESN'T ACTUALLY WORK PROPERLY! - fix!
-    DB0_DIR = IN;
-    DB1_DIR = IN;
-    DB2_DIR = IN;
-    DB3_DIR = IN;
-    DB4_DIR = IN;
-    DB5_DIR = IN;
-    DB6_DIR = IN;
-    DB7_DIR = IN;
-    //PowerLED = DB0_DIR;
-    //delay_us(20000);
-}
 
 void _mon_putc (char c)
  {
@@ -581,7 +549,7 @@ void NMEAParser(void) {
                     date_Changed = 1;
                 }
             }
-            
+
             time[a][2] = '\0';
             date[a][2] = '\0';
         }
@@ -630,7 +598,7 @@ void NMEAParser(void) {
             }
         }
 }
-    
+
     else if(strcmp(tokens[0], "$GPGSV") == 0) {
         // String is $GPGSV
         // This contains satellites in view
@@ -858,7 +826,7 @@ void __ISR(_UART2_VECTOR, ipl2) IntUart2Handler(void)
             }
             return;
         }
-            
+
 	// We don't care about TX interrupt
 	if ( mU2TXGetIntFlag() )
 	{
