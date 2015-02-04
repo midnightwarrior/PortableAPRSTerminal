@@ -26,8 +26,8 @@ BYTE screenPage = 5;
 BYTE loadNewScreenPage = 0;
 BYTE numberOfScreenPages = 5;
 
-char time[3][3];
-char date[3][3];
+int time[3];
+int date[3];
 float latitude[2];
 float longitude[2];
 int a;
@@ -38,9 +38,6 @@ int numberOfSatellites = 0;
 
 //int** satellitesInView;
 int satellitesInView[32][4];
-
-
-
 
 long satellitesInViewLength = 0;
 

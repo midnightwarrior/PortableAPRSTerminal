@@ -38,7 +38,7 @@
 // EDIT:  v15.01b21a statically assigns the satellite array - malloc seems too fraught with dragons and fire to be of use.
 
 // SET VERSION NUMBER HERE!
-char versionNumber[11] = "v15.02b04b";
+char versionNumber[11] = "v15.02b05a";
 
 void init(void) {
     SYSTEMConfig(SYS_FREQ, SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
@@ -276,16 +276,14 @@ void displayGPSData(void) {
         switch(screenPage) {
             case 1: if(time_Changed) {
                     time_Changed = 0;
-                    GLCD_RenderText_writeBytes(0+31,0,time[0], 1);
-                    GLCD_RenderText_writeBytes(18+31, 0, time[1], 1);
-                    GLCD_RenderText_writeBytes(36+31, 0, time[2], 1);
+                    snprintf(str,9,"%02d:%02d:%02d", time[0], time[1], time[2]);
+                    GLCD_RenderText_writeBytes(0+31,0,str, 1);
                 }
 
                     if(date_Changed) {
                         date_Changed = 0;
-                        GLCD_RenderText_writeBytes(0+31,1, date[0],1);
-                        GLCD_RenderText_writeBytes(18+31, 1, date[1],1);
-                        GLCD_RenderText_writeBytes(36+31, 1, date[2],1);
+                        snprintf(str,11,"%02d/%02d/%04d", date[0], date[1], date[2]);
+                        GLCD_RenderText_writeBytes(0+31,1, str,1);
                     }
                     if(latitude_Changed) {
                         latitude_Changed = 0;
@@ -334,9 +332,9 @@ void displayGPSData(void) {
                     loadScreenPage();
                     time_Changed = 0;
                     // Get time from strings
-                    int hour = atoi(time[0]);
-                    int minute = atoi(time[1]);
-                    int second = atoi(time[2]);
+                    int hour = time[0];
+                    int minute = time[1];
+                    int second = time[2];
 
                     // Convert to 12-hour time
                     if(hour > 12) {
@@ -527,31 +525,34 @@ void NMEAParser(void) {
 //        // String is $GPRMC
 //
 //        // Get time and date
-        char oldTime[3][3];
-        char oldDate[3][3];
+        int oldTime[3];
+        int oldDate[3];
 
         for(a=0;a<3;a++) {
-            for(b=0;b<3;b++) {
-               oldTime[a][b] = time[a][b];
-               oldDate[a][b] = date[a][b];
-            }
+            oldTime[a] = time[a];
+            oldDate[a] = date[a];
         }
+
+        int tempDate, tempTime;
+        tempTime = atoi(tokens[1]);
+        tempDate = atoi(tokens[9]);
+        time[0] = tempTime / 10000;
+        date[0] = tempDate / 10000;
+        time[1] = (tempTime / 100) - (time[0]*100);
+        date[1] = (tempDate/100)-(date[0]*100);
+        time[2] = tempTime - time[0]*10000 - time[1] * 100;
+        date[2]=2000+tempDate - date[0]*10000 - date[1] * 100;
+
+        // Check to see if time/date has changed
         for(a=0;a<3;a++) {
-            for(b=0;b<2;b++) {
-                int offset = (a*2)+b;
-                time[a][b] = tokens[1][offset];
-                date[a][b] = tokens[9][offset];
-
-                if(time[a][b] != oldTime[a][b]) {
-                    time_Changed = 1;
-                }
-                if(date[a][b] != oldTime[a][b]) {
-                    date_Changed = 1;
-                }
+            if(time[a]!=oldTime[a]) {
+                // Time has changed!
+                time_Changed = 1;
             }
-
-            time[a][2] = '\0';
-            date[a][2] = '\0';
+            if(date[a]!=oldTime[a]) {
+                // Date has changed!
+                date_Changed = 1;
+            }
         }
 
         if(tokens[2][0] == 'A') {
@@ -754,8 +755,6 @@ void NMEAParser(void) {
         }
 
     }
-
-    free(tokens);
 }
 
 int NMEAChecksum(void) {
