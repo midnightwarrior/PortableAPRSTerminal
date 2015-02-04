@@ -125,3 +125,4 @@ Solution! - Use SD card iface - 31&32 - RX/TX
 #define DEBUGTX PORTGbits.RG8
 
 #define GPS_BaudRate 9600
+#define PI 3.141592653589793

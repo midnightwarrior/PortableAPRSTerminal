@@ -76,4 +76,4 @@ BYTE satellitesInView_Changed = 0;
 
 BYTE instructionCount = 0x00;
 int fooCounter = 0;
-char str[15];
+char str[50];
