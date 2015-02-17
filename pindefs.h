@@ -121,8 +121,17 @@ Solution! - Use SD card iface - 31&32 - RX/TX
 #define GPSTX_DIR TRISFbits.TRISF5
 #define GPSTX PORTFbits.RF5
 
+// This will be deprecated once I can get USB to work
 #define DEBUGTX_DIR TRISGbits.TRISG8
 #define DEBUGTX PORTGbits.RG8
+
+// ESP8266 pins
+#define ESP8266RX_DIR TRISDbits.TRISD2
+#define ESP8266RX PORTDbits.RD2
+#define ESP8266TX_DIR TRISGbits.TRISG8
+#define ESP8266TX PORTGbits.RG8
+#define ESP8266EN_DIR TRISDbits.TRISD7
+#define ESP8266EN LATDbits.LATD7
 
 #define GPS_BaudRate 9600
 #define PI 3.141592653589793

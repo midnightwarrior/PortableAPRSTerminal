@@ -5,4 +5,6 @@ pindefs.h  \
 variableDefs.h  \
  prototypes.h  \
 PIC32GraphicsLibrary.h  \
-PIC32GraphicsLibrary_pins.h 
+PIC32GraphicsLibrary_pins.h  \
+ sunpos.cpp  \
+sunpos.h 

@@ -30,6 +30,7 @@
 #include "prototypes.h"
 #include "PIC32GraphicsLibrary.h"
 #include "PIC32GraphicsLibrary_pins.h"
+#include "sunpos.cpp"
 
 // Where am I?
 // Expanding the NMEA parser so I can pull out all of the information I need, and developing the
@@ -38,7 +39,7 @@
 // EDIT:  v15.01b21a statically assigns the satellite array - malloc seems too fraught with dragons and fire to be of use.
 
 // SET VERSION NUMBER HERE!
-char versionNumber[11] = "v15.02b05a";
+char versionNumber[11] = "v15.02b17a";
 
 void init(void) {
     SYSTEMConfig(SYS_FREQ, SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
@@ -58,7 +59,8 @@ void init(void) {
 
     // Initialise the GPS!
     initGPS();
-    initDebug();
+    //initDebug();
+    initESP8266();
 }
 
 void initGPS() {
@@ -73,6 +75,34 @@ void initGPS() {
     UARTEnable(UART2, UART_ENABLE_FLAGS(UART_PERIPHERAL | UART_RX | UART_TX));
     // Extra stuff for interrupts
     ConfigIntUART2(UART_INT_PR2 | UART_RX_INT_EN);
+    INTEnableSystemMultiVectoredInt();
+}
+
+void initESP8266() {
+    // This function will initialise the UART for the ESP8266 WiFi chipset.
+    // It's on UART1 (rx side), the horizontal sync pin
+    ESP8266RX_DIR = IN;
+    ESP8266TX_DIR = OUT;
+    ESP8266EN = OUT;
+
+    ESP8266EN = 1;
+    // Set up UART3 for transmit, UART1 for receive
+    // Messy due to layout of MiniMaximite pins
+
+    UARTConfigure(UART3, (UART_ENABLE_HIGH_SPEED | UART_ENABLE_PINS_TX_RX_ONLY));
+    //UARTSetFifoMode(UART3, UART_INTERRUPT_ON_RX_NOT_EMPTY);
+    UARTSetDataRate(UART3, 4e7, 460800);
+    UARTSetLineControl(UART3, UART_DATA_SIZE_8_BITS | UART_PARITY_NONE | UART_STOP_BITS_1);
+    UARTEnable(UART3, UART_ENABLE_FLAGS(UART_PERIPHERAL | UART_RX | UART_TX));
+
+    // Set up ESP8266 RX
+    UARTConfigure(UART1, (UART_ENABLE_HIGH_SPEED | UART_ENABLE_PINS_TX_RX_ONLY));
+    UARTSetFifoMode(UART1, UART_INTERRUPT_ON_RX_NOT_EMPTY);
+    UARTSetDataRate(UART1, 4e7, 460800);
+    UARTSetLineControl(UART1, UART_DATA_SIZE_8_BITS | UART_PARITY_NONE | UART_STOP_BITS_1);
+    UARTEnable(UART1, UART_ENABLE_FLAGS(UART_PERIPHERAL | UART_RX | UART_TX));
+
+    ConfigIntUART1(UART_INT_PR2 | UART_RX_INT_EN);
     INTEnableSystemMultiVectoredInt();
 }
 
@@ -121,55 +151,94 @@ int main(void) {
     // Initialise satellites in view array
     //satellitesInView = malloc(sizeof *satellitesInView * 4);
 
-    printf("PortableAPRS unit starting...\r\n");
+    //printf("PortableAPRS unit starting...\r\n");
 
     loadScreenPage();
+    printf("AT+CWLAP\r\n");
 
     while(1) {
-        GPSBufferPos = 0;
-        while(GPSDataReady == 0) {
-            // This loop will only loop if data isn't ready
-                // Data is ready - rejoice! ...ahem... I mean, buffer it
-                while(rxbuffer[0] != '$') {
-                    // This string is INVALID! WRONG!
-                    // Get rid of it immediately
-                    GPSBufferPos = 0;
-                    memset(rxbuffer, 0, 82);
-                    if(is_uart_data_ready()) {
-                        rxbuffer[0] = uart_getchar();
-                    }
-
-                }
-                GPSBufferPos++;
-
-                // The first part of the string is valid
-                // Keep receiving!
-
-                while(rxbuffer[GPSBufferPos-1] != 0x0D) {
-                    if(is_uart_data_ready()) {
-                        rxbuffer[GPSBufferPos] = uart_getchar();
-                        GPSBufferPos++;
-                    }
-                }
-
-                GPSDataReady = 1;
-                rxbuffer[GPSBufferPos] = '\0';
-                if(NMEAChecksum() == 0) {
-                    GPSDataReady = 0;
-                    memset(rxbuffer, 0, 82);
-                }
-                break;
-            }
-
-            if(GPSDataReady == 1) {
-                    strcpy(NMEAString, rxbuffer);
-                    NMEAParser();
-                }
-                GPSDataReady = 0;
-                GPSBufferPos = 0;
-                memset(rxbuffer, 0, 82);
+        if(is_uart_data_ready()) {
+            receiveGPSData();
+        }
     }
     return (EXIT_SUCCESS);
+}
+
+void receiveWiFiData() {
+    WiFiBufferPos = 0;
+    WiFiDataReady = 0;
+    memset(WiFiBuffer, 0, 1024);
+    if(is_WiFi_data_ready()) {
+        while(WiFiDataReady == 0) {
+            if(is_WiFi_data_ready()) {
+                PowerLED = 1;
+                WiFiBuffer[WiFiBufferPos] = WiFi_getchar();
+//            snprintf(str,16,"%i", WiFiBuffer[WiFiBufferPos]);
+//            GLCD_RenderText_writeBytes(0,0,str,1);
+              WiFiBufferPos++;
+            }
+            PowerLED = 0;
+
+            if(WiFiBufferPos > 20) {
+                // End of data - ready!
+                WiFiDataReady = 1;
+                WiFiBuffer[WiFiBufferPos] = '\0';
+                return;
+            }
+
+            if(WiFiBuffer[WiFiBufferPos-1] == '\n') {
+                WiFiDataReady = 1;
+                WiFiBuffer[WiFiBufferPos] = '\0';
+                return;
+            }
+        }
+    }
+}
+
+void receiveGPSData() {
+    GPSBufferPos = 0;
+    GPSDataReady = 0;
+    memset(rxbuffer, 0, 82);
+        while(GPSDataReady == 0) {
+            // This loop will only loop if data isn't ready
+            // Data is ready - rejoice! ...ahem... I mean, buffer it
+            if(is_uart_data_ready()) {
+                rxbuffer[0] = uart_getchar();
+            }
+            if(rxbuffer[0] != '$') {
+                // This string is INVALID! WRONG!
+                // Get rid of it immediately
+                return;
+            }
+            GPSBufferPos++;
+
+            // The first part of the string is valid
+            // Keep receiving!
+
+            while(rxbuffer[GPSBufferPos-1] != 0x0D) {
+                if(is_uart_data_ready()) {
+                    rxbuffer[GPSBufferPos] = uart_getchar();
+                    GPSBufferPos++;
+                }
+                if(GPSBufferPos == 82) {
+                    // Something's gone cactus - data is invalid
+                    return;
+                }
+            }
+
+            GPSDataReady = 1;
+            rxbuffer[GPSBufferPos] = '\0';
+            if(NMEAChecksum() == 0) {
+                // Data is invalid, start again
+                return;
+            }
+            break;
+        }
+
+        strcpy(NMEAString, rxbuffer);
+        NMEAParser();
+        //GPSDataReady = 0;
+
 }
 
 void forceDataRewrite() {
@@ -195,7 +264,7 @@ void loadScreenPage(void) {
     GLCD_ON();
     GLCD_CLR();
     Set_Start_Line(0);
-    forceDataRewrite();
+    //forceDataRewrite();
     snprintf(str,12," Page %d/%d ",screenPage+1, numberOfScreenPages+1);
     GLCD_RenderText_writeBytes(67,7,str,0);
     switch(screenPage) {
@@ -248,24 +317,8 @@ void loadScreenPage(void) {
                 GLCD_RenderText(56,30,"99");
                 break;
 
-        case 5: GLCD_DrawCircle(24, 29, 24, 1);
-                // Draw SNR graph grid
-                GLCD_DrawLine(64,2,64,20,0);
-                GLCD_DrawLine(64,20,127,20,0);
-                GLCD_DrawLine(64,11,127,11,1);
-                GLCD_RenderText(52,20,"0dB");
-                GLCD_RenderText(56,9,"50");
-                GLCD_RenderText(56,2,"99");
-
-                // Range from 0 - 99dB = 18 pixels
-                // 6 sats per line: 64 pixels so 10 pix each
-                // Lines at y=24, y=48
-                GLCD_DrawLine(64,48,127,48,0);
-                GLCD_DrawLine(64,30,64,48,0);
-                GLCD_DrawLine(64,39,127,39,1);
-                GLCD_RenderText(52,48,"0dB");
-                GLCD_RenderText(56,37,"50");
-                GLCD_RenderText(56,30,"99");
+        case 5: // Serial terminal for WiFi
+                printf("AT+CWLAP\r\n");
                 break;
 
     }
@@ -289,15 +342,15 @@ void displayGPSData(void) {
                         latitude_Changed = 0;
                         snprintf(str,16,"%.0f~ %2.4f'",latitude[0],latitude[1]);
                         GLCD_RenderText_writeBytes(31,2,str,1);
-                        printf(str);
-                        printf("\r\n");
+                        //printf(str);
+                        //printf("\r\n");
                     }
                     if(longitude_Changed) {
                         longitude_Changed = 0;
                         snprintf(str,116,"%.0f~ %2.4f'",longitude[0],longitude[1]);
                         GLCD_RenderText_writeBytes(31,3,str,1);
-                        printf(str);
-                        printf("\r\n");
+                        //printf(str);
+                        //printf("\r\n");
                     }
                     if(altitude_msl_Changed) {
                         altitude_msl_Changed = 0;
@@ -308,7 +361,15 @@ void displayGPSData(void) {
                         numberOfSatellites_Changed = 0;
                         snprintf(str,3,"%d ",numberOfSatellites);
                         GLCD_RenderText_writeBytes(31, 5, str,1);
-                }
+                    }
+                    if(!fixValid) {
+                        // Fix is not valid
+                        GLCD_RenderText(0,57,"Fix invalid!");
+                    }
+                    else {
+                        // Fix is valid
+                        GLCD_RenderText(0,57,"Fix valid!  ");
+                    }
             break;
             case 2: if(hdop_Changed) {
                         hdop_Changed = 0;
@@ -324,6 +385,14 @@ void displayGPSData(void) {
                         pdop_Changed = 0;
                         snprintf(str,6,"%f",pdop);
                         GLCD_RenderText_writeBytes(70,4,str,1);
+                    }
+                    if(!fixValid) {
+                        // Fix is not valid
+                        GLCD_RenderText(0,57,"Fix invalid!");
+                    }
+                    else {
+                        // Fix is valid
+                        GLCD_RenderText(0,57,"Fix valid!  ");
                     }
             break;
             case 3: // Draw analogue hands
@@ -418,7 +487,7 @@ void displayGPSData(void) {
                         }
                             // Make each satellite number a question mark if invalid
                             if(!fixValid) {
-                                snprintf(str,3,"??");
+                                snprintf(str,2,"?");
                             }
                             GLCD_RenderText(x, y, str);
                             //Draw_Point(x,y,1);
@@ -428,43 +497,21 @@ void displayGPSData(void) {
                     GLCD_RenderText(0,56,str);
                 }
                 break;
-            case 5: // Display currently viewable satellites and their SNRs
-
-                if(satellitesInView_Changed) {
-                    GLCD_ON();
-                    GLCD_CLR();
-                    loadScreenPage();
-                    satellitesInView_Changed = 0;
-                    satellitesTracked = 0;
-                    // Display what satellites are in view (and SNRs!)
-                    // Range from 0 - 99dB = 18 pixels
-                    // 6 sats per line: 64 pixels so 10 pix each
-                    // Lines at y=20, y=44
-                    for(a=0; a<satellitesInViewLength; a++) {
-                        y = 29 + ((90 - satellitesInView[a][1])*sin((270+satellitesInView[a][2])*(PI/180))/4);
-                        x = 24 + ((90 - satellitesInView[a][1])*cos((270+satellitesInView[a][2])*(PI/180))/4);
-                        Draw_Point(x, y, 1);
-                        //printf("SN: %d, X: %d, Y: %d\r\n", satellitesInView[a][0],x, y);
-
-                        // Add satellite number to plots
-                        snprintf(str,3,"%d",satellitesInView[a][0]);
-                        if(satellitesInView[a][0] < 10) {
-                             snprintf(str,3,"0%d",
-                                     satellitesInView[a][0]);
-                        }
-                        if(satellitesInView[a][3] > 0) {
-                            GLCD_RenderText(((satellitesTracked % 6 * 10) + 68), 22+((satellitesTracked > 5)*28), str);
-                            // Do SNR bars
-                            //if(satellitesInView[a][3] != 0) {
-                            //}
-                                linelength = 18*((double)satellitesInView[a][3]/100);
-                                GLCD_DrawBox(((satellitesTracked % 6 * 10) + 72)-1, 20+((satellitesTracked > 5)*28), ((satellitesTracked % 6 * 10) + 72)+1, 20+((satellitesTracked > 5)*28) - (int)linelength, 1);
-                                satellitesTracked += 1;
-                        }
+            case 5: // Serial terminal for WiFi
+                //while(1) {
+                    if(is_WiFi_data_ready()) {
+                        receiveWiFiData();
+                        GLCD_RenderText_writeBytes(0,ypos%7,"                                ",1);
+                        GLCD_RenderText_writeBytes(0,(ypos+1)%7,"_                               ",1);
+                        GLCD_RenderText_writeBytes(0,ypos%7,WiFiBuffer,1);
+                        ypos++;
+                        //printf("AT\r\n");
                     }
-                    snprintf(str,15,"Tracking: %d",satellitesTracked);
-                    GLCD_RenderText(0,56,str);
-                }
+                    else {
+                        //printf("AT\r\n");
+                    }
+                //}
+                
                 break;
         }
 }
@@ -473,8 +520,6 @@ void NMEAParser(void) {
     // This is the NMEA sentence parser
     char tokens[50][50];
     memset(tokens, 0, 50);
-//    printf(NMEAString);
-//    printf("\r\n");
 
     int tokenPosition = 0;
 
@@ -719,10 +764,10 @@ void NMEAParser(void) {
             // This data has been updated - push it!
             if(satelliteSentencesReceived == numberOfMessages) {
                 satellitesInView_Changed = 1;
-                printf("PUSH!\r\n");
+                //printf("PUSH!\r\n");
             }
             else {
-                printf("Satellite positional data was invalid, held back\r\n");
+                //printf("Satellite positional data was invalid, held back\r\n");
                 satelliteSentencesReceived = 0;
                 satellitesInView_Changed = 0;
             }
@@ -773,7 +818,7 @@ int NMEAChecksum(void) {
     str_checksum[2] = NULL;
     number_checksum = strtol(str_checksum, NULL, 16);
 
-    printf("Checksum:\r\nCalculated: %d, real: %d\r\n", checksum, number_checksum);
+    //printf("Checksum:\r\nCalculated: %d, real: %d\r\n", checksum, number_checksum);
     if(number_checksum == checksum) {
         // Checksum is valid!
 //        printf("Checksum is valid!\r\n");
@@ -810,13 +855,31 @@ void __ISR(_TIMER_2_VECTOR, ipl1) IntTim2Handler(void) {
     }
 }
 
+void __ISR(_UART1_VECTOR, ipl2) IntUart1Handler(void)
+{
+    // Handler to deal with data from the ESP8266 WiFi module!
+    if(mU1RXGetIntFlag()) {
+        mU1RXClearIntFlag();
+        char c = ReadUART1();
+        if((RXQ_WiFi.end+1)%QUEUE_SIZE != RXQ_WiFi.start) {
+            	RXQ_WiFi.a[RXQ_WiFi.end] = c;
+		RXQ_WiFi.end = (RXQ_WiFi.end + 1)%QUEUE_SIZE;
+        }
+        return;
+    }
+    // We don't care about TX interrupt
+    if ( mU1TXGetIntFlag() )
+	{
+            mU1TXClearIntFlag();
+	}
+}
+
 void __ISR(_UART2_VECTOR, ipl2) IntUart2Handler(void)
 {
 	// Is this an RX interrupt?
 	if(mU2RXGetIntFlag())
 	{
 	    mU2RXClearIntFlag();
-            //PowerLED = !PowerLED;
             char c = ReadUART2();
             //PowerLED = !PowerLED;
             if ((RXQ.end+1)%QUEUE_SIZE != RXQ.start) {
@@ -842,7 +905,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR,ipl3) DetButtons(void) {
     if(!ButtonPress) {
         // Button was pressed!
         // Increment the screen page number
-        printf("Interrupt!\r\n");
+        //printf("Interrupt!\r\n");
         if(screenPage < numberOfScreenPages) {
             screenPage++;
             loadNewScreenPage = 1;
@@ -861,9 +924,20 @@ int is_uart_data_ready(void)
 	return (RXQ.start != RXQ.end);
 }
 
+int is_WiFi_data_ready(void)
+{
+	return (RXQ_WiFi.start != RXQ_WiFi.end);
+}
+
 char uart_getchar(void)
 {
 	char c = RXQ.a[RXQ.start];
 	RXQ.start = (RXQ.start + 1)%QUEUE_SIZE;
 	return c;
+}
+
+char WiFi_getchar(void) {
+    char c = RXQ_WiFi.a[RXQ_WiFi.start];
+    RXQ_WiFi.start = (RXQ_WiFi.start + 1)%QUEUE_SIZE;
+    return c;
 }

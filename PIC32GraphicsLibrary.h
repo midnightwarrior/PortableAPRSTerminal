@@ -79,7 +79,7 @@ void GLCD_DrawLine(unsigned short x0, unsigned short y0, unsigned short x1, unsi
           case 1: // Dotted line - even pixels
               if(!(x0 % 2)) {
                    Draw_Point(x0,y0,1);
-                   PowerLED = 1;
+                   //PowerLED = 1;
               }
               break;
           case 2: // Dotted line - odd pixels
@@ -406,10 +406,20 @@ void GLCD_RenderText_writeBytes(int init_x, int init_y, char *str, int colour) {
             GOTO_XY(x + a, y);
             GOTO_ROW(init_y);
             if(colour) {
-                GLCD_Write((font[str[offset] - 0x20][a]));
+                if(str[offset] >= 0x20) {
+                    GLCD_Write((font[str[offset] - 0x20][a]));
+                }
+                else {
+                    GLCD_Write((font[0x00][a]));
+                }
             }
             else if(!colour) {
-                GLCD_Write(~(font[str[offset] - 0x20][a]));
+                if(str[offset] >= 0x20) {
+                    GLCD_Write(~(font[str[offset] - 0x20][a]));
+                }
+                else {
+                    GLCD_Write(~(font[0x00][a]));
+                }
             }
         }
         offset++;

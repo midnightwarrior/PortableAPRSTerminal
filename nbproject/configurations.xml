@@ -10,6 +10,7 @@
       <itemPath>prototypes.h</itemPath>
       <itemPath>PIC32GraphicsLibrary.h</itemPath>
       <itemPath>PIC32GraphicsLibrary_pins.h</itemPath>
+      <itemPath>sunpos.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"

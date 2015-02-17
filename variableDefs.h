@@ -1,6 +1,14 @@
 //This is the string that will hold the data sentence from the GPS
 char NMEAString[82];
+// This will hold the data from the GPS serial port
 char rxbuffer[82];
+// This will hold the data from the ESP8266 WiFi module
+char WiFiBuffer[1024];
+int WiFiDataReady = 0;
+int WiFiBufferPos = 0;
+
+int ypos=0;
+
 int GPSDataReady = 0;
 int GPSBufferPos = 0;
 int GPSDataReading = 0;
@@ -11,7 +19,7 @@ int satelliteSentencesReceived = 0;
 // Screen refresh rate in multiples of 200ms
 int screenRefreshRate = 5;
 
-#define QUEUE_SIZE 128
+#define QUEUE_SIZE 8192
 typedef struct   // C method of creating new types
 {
 	char a[QUEUE_SIZE];
@@ -20,9 +28,10 @@ typedef struct   // C method of creating new types
 } Queue;
 
 Queue RXQ, TXQ;
+Queue RXQ_WiFi, TXQ_WiFi;
 
 BYTE screenRefreshTimerPeriod = 0;
-BYTE screenPage = 5;
+BYTE screenPage = 0;
 BYTE loadNewScreenPage = 0;
 BYTE numberOfScreenPages = 5;
 
