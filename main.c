@@ -37,7 +37,7 @@
 // menu system a little bit.
 
 // SET VERSION NUMBER HERE!
-char versionNumber[11] = "v15.02b20a";
+char versionNumber[11] = "v15.02b20b";
 
 void init(void) {
     SYSTEMConfig(SYS_FREQ, SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
