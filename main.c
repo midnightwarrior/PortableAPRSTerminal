@@ -30,24 +30,22 @@
 #include "prototypes.h"
 #include "PIC32GraphicsLibrary.h"
 #include "PIC32GraphicsLibrary_pins.h"
-#include "sunpos.cpp"
+#include "ESP8266Driver.h"
 
 // Where am I?
 // Expanding the NMEA parser so I can pull out all of the information I need, and developing the
 // menu system a little bit.
-// I'm trying to get $GPGSV stuff out by mallocing a dynamic 2d array.  It's not working currently :(
-// EDIT:  v15.01b21a statically assigns the satellite array - malloc seems too fraught with dragons and fire to be of use.
 
 // SET VERSION NUMBER HERE!
-char versionNumber[11] = "v15.02b17a";
+char versionNumber[11] = "v15.02b20a";
 
 void init(void) {
     SYSTEMConfig(SYS_FREQ, SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
     OpenCoreTimer(CORE_TICK_RATE);
     // Set up timer 1 as the basis for the delay_us() function
     OpenTimer1(T1_ON | T1_IDLE_CON | T1_PS_1_8 | T1_SOURCE_INT,  5000);
-    // Set up timer 2 as the screen refresh clock (200ms)
-    OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_256,  31250);
+    // Set up timer 2 as the screen refresh clock (50ms)
+    OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_256,  7813);
     ConfigIntTimer2(T2_INT_ON | T2_INT_PRIOR_1);
 
     // Set up pushbutton interrupt
@@ -148,13 +146,17 @@ int main(void) {
 
     Set_Start_Line(0);
 
+
     // Initialise satellites in view array
     //satellitesInView = malloc(sizeof *satellitesInView * 4);
 
     //printf("PortableAPRS unit starting...\r\n");
 
     loadScreenPage();
-    printf("AT+CWLAP\r\n");
+    // Get rid of all the noise that's been received as data from the WiFi UART buffer
+    clearWiFiBuffer();
+    // Send an example command - retrieve list of WiFi networks
+    //printf("AT+CWLAP\r\n");
 
     while(1) {
         if(is_uart_data_ready()) {
@@ -167,19 +169,17 @@ int main(void) {
 void receiveWiFiData() {
     WiFiBufferPos = 0;
     WiFiDataReady = 0;
-    memset(WiFiBuffer, 0, 1024);
+    memset(WiFiBuffer, 0, 8192);
     if(is_WiFi_data_ready()) {
-        while(WiFiDataReady == 0) {
+        while(WiFiDataReady == 0 && WiFiBufferPos < QUEUE_SIZE) {
             if(is_WiFi_data_ready()) {
-                PowerLED = 1;
                 WiFiBuffer[WiFiBufferPos] = WiFi_getchar();
 //            snprintf(str,16,"%i", WiFiBuffer[WiFiBufferPos]);
 //            GLCD_RenderText_writeBytes(0,0,str,1);
               WiFiBufferPos++;
             }
-            PowerLED = 0;
 
-            if(WiFiBufferPos > 20) {
+            if(WiFiBufferPos > 19) {
                 // End of data - ready!
                 WiFiDataReady = 1;
                 WiFiBuffer[WiFiBufferPos] = '\0';
@@ -267,6 +267,9 @@ void loadScreenPage(void) {
     //forceDataRewrite();
     snprintf(str,12," Page %d/%d ",screenPage+1, numberOfScreenPages+1);
     GLCD_RenderText_writeBytes(67,7,str,0);
+    // Dynamically set screen update period - set default
+    screenRefreshRate = 20;
+
     switch(screenPage) {
        case 0:  GLCD_RenderText_writeBytes(0,0,"Portable APRS",1);
                 GLCD_RenderText_writeBytes(0,1,"midnightwarrior",1);
@@ -318,6 +321,7 @@ void loadScreenPage(void) {
                 break;
 
         case 5: // Serial terminal for WiFi
+                screenRefreshRate = 1;
                 printf("AT+CWLAP\r\n");
                 break;
 
@@ -501,14 +505,15 @@ void displayGPSData(void) {
                 //while(1) {
                     if(is_WiFi_data_ready()) {
                         receiveWiFiData();
-                        GLCD_RenderText_writeBytes(0,ypos%7,"                                ",1);
-                        GLCD_RenderText_writeBytes(0,(ypos+1)%7,"_                               ",1);
-                        GLCD_RenderText_writeBytes(0,ypos%7,WiFiBuffer,1);
-                        ypos++;
+//                        GLCD_RenderText_writeBytes(0,ypos%7,"                                ",1);
+//                        GLCD_RenderText_writeBytes(0,(ypos+1)%7,"_                               ",1);
+//                        GLCD_RenderText_writeBytes(0,ypos%7,WiFiBuffer,1);
+//                        ypos++;
+                        scrollingTerminal(WiFiBuffer);
                         //printf("AT\r\n");
                     }
                     else {
-                        //printf("AT\r\n");
+
                     }
                 //}
                 
@@ -940,4 +945,12 @@ char WiFi_getchar(void) {
     char c = RXQ_WiFi.a[RXQ_WiFi.start];
     RXQ_WiFi.start = (RXQ_WiFi.start + 1)%QUEUE_SIZE;
     return c;
+}
+
+void clearWiFiBuffer(void) {
+    int a = 0;
+    while(is_WiFi_data_ready && a < QUEUE_SIZE - 1) {
+        WiFi_getchar();
+        a++;
+    }
 }

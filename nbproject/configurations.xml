@@ -10,7 +10,7 @@
       <itemPath>prototypes.h</itemPath>
       <itemPath>PIC32GraphicsLibrary.h</itemPath>
       <itemPath>PIC32GraphicsLibrary_pins.h</itemPath>
-      <itemPath>sunpos.h</itemPath>
+      <itemPath>ESP8266Driver.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"

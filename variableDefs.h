@@ -2,10 +2,7 @@
 char NMEAString[82];
 // This will hold the data from the GPS serial port
 char rxbuffer[82];
-// This will hold the data from the ESP8266 WiFi module
-char WiFiBuffer[1024];
-int WiFiDataReady = 0;
-int WiFiBufferPos = 0;
+
 
 int ypos=0;
 
@@ -16,8 +13,8 @@ int GPSDataReading = 0;
 double linelength = 0;
 int satelliteSentencesReceived = 0;
 
-// Screen refresh rate in multiples of 200ms
-int screenRefreshRate = 5;
+// Screen refresh rate in multiples of 50ms
+int screenRefreshRate = 20;
 
 #define QUEUE_SIZE 8192
 typedef struct   // C method of creating new types
@@ -27,11 +24,32 @@ typedef struct   // C method of creating new types
 	int end;
 } Queue;
 
+// Set up struct to hold WiFi network information
+// It looks like APs are sorted by channel and values are:
+// (security, "name", signal strength, MAC, channel)
+// where for security: 0 = open, 1 = WEP, 3 = WPA, 4 = WPA2
+typedef struct
+{
+    BYTE security;
+    char APName[33];
+    BYTE RSSI;
+    BYTE MACAddress[6];
+    BYTE channelNumber;
+} WiFiNetwork;
+
+// This will hold the data from the ESP8266 WiFi module
+char WiFiBuffer[QUEUE_SIZE];
+int WiFiDataReady = 0;
+int WiFiBufferPos = 0;
+
+// Create an array that can handle 64 simultaneous networks
+WiFiNetwork visibleNetworks[64];
+
 Queue RXQ, TXQ;
 Queue RXQ_WiFi, TXQ_WiFi;
 
 BYTE screenRefreshTimerPeriod = 0;
-BYTE screenPage = 0;
+BYTE screenPage = 5;
 BYTE loadNewScreenPage = 0;
 BYTE numberOfScreenPages = 5;
 

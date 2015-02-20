@@ -31,3 +31,6 @@ void loadScreenPage(void);
 void initESP8266(void);
 void receiveGPSData(void);
 char WiFi_getchar(void);
+void displayScrollingTerminal(void);
+void clearWiFiBuffer(void);
+void receiveWiFiData(void);
