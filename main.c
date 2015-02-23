@@ -38,7 +38,6 @@
 
 // SET VERSION NUMBER HERE!
 char versionNumber[11] = "v15.02b24a";
-int ypos;
 
 void init(void) {
     SYSTEMConfig(SYS_FREQ, SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
