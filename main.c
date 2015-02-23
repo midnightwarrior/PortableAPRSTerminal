@@ -37,7 +37,8 @@
 // menu system a little bit.
 
 // SET VERSION NUMBER HERE!
-char versionNumber[11] = "v15.02b20b";
+char versionNumber[11] = "v15.02b24a";
+int ypos;
 
 void init(void) {
     SYSTEMConfig(SYS_FREQ, SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
@@ -153,6 +154,7 @@ int main(void) {
     //printf("PortableAPRS unit starting...\r\n");
 
     loadScreenPage();
+
     // Get rid of all the noise that's been received as data from the WiFi UART buffer
     clearWiFiBuffer();
     // Send an example command - retrieve list of WiFi networks
@@ -174,9 +176,9 @@ void receiveWiFiData() {
         while(WiFiDataReady == 0 && WiFiBufferPos < QUEUE_SIZE) {
             if(is_WiFi_data_ready()) {
                 WiFiBuffer[WiFiBufferPos] = WiFi_getchar();
-//            snprintf(str,16,"%i", WiFiBuffer[WiFiBufferPos]);
-//            GLCD_RenderText_writeBytes(0,0,str,1);
-              WiFiBufferPos++;
+//              snprintf(str,16,"%i", WiFiBuffer[WiFiBufferPos]);
+//              GLCD_RenderText_writeBytes(0,0,str,1);
+                WiFiBufferPos++;
             }
 
             if(WiFiBufferPos > 19) {
@@ -321,8 +323,8 @@ void loadScreenPage(void) {
                 break;
 
         case 5: // Serial terminal for WiFi
-                screenRefreshRate = 1;
-                printf("AT+CWLAP\r\n");
+                //screenRefreshRate = 1;
+                //printf("AT+CWLAP\r\n");
                 break;
 
     }
@@ -503,18 +505,13 @@ void displayGPSData(void) {
                 break;
             case 5: // Serial terminal for WiFi
                 //while(1) {
-                    if(is_WiFi_data_ready()) {
-                        receiveWiFiData();
-//                        GLCD_RenderText_writeBytes(0,ypos%7,"                                ",1);
-//                        GLCD_RenderText_writeBytes(0,(ypos+1)%7,"_                               ",1);
-//                        GLCD_RenderText_writeBytes(0,ypos%7,WiFiBuffer,1);
-//                        ypos++;
-                        scrollingTerminal(WiFiBuffer);
-                        //printf("AT\r\n");
-                    }
-                    else {
+                    //if(is_WiFi_data_ready()) {
+                        retrieveNetworkList();
+                        //scrollingTerminal(WiFiBuffer);
+                    //}
+                    //else {
 
-                    }
+                    //}
                 //}
                 
                 break;
@@ -948,9 +945,5 @@ char WiFi_getchar(void) {
 }
 
 void clearWiFiBuffer(void) {
-    int a = 0;
-    while(is_WiFi_data_ready && a < QUEUE_SIZE - 1) {
-        WiFi_getchar();
-        a++;
-    }
+    memset(&RXQ_WiFi, 0, sizeof(Queue));
 }

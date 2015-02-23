@@ -32,15 +32,15 @@ typedef struct
 {
     BYTE security;
     char APName[33];
-    BYTE RSSI;
-    BYTE MACAddress[6];
+    int RSSI;
+    char MACAddress[18];
     BYTE channelNumber;
 } WiFiNetwork;
 
 // This will hold the data from the ESP8266 WiFi module
 char WiFiBuffer[QUEUE_SIZE];
-int WiFiDataReady = 0;
-int WiFiBufferPos = 0;
+int WiFiDataReady;
+int WiFiBufferPos;
 
 // Create an array that can handle 64 simultaneous networks
 WiFiNetwork visibleNetworks[64];
@@ -99,5 +99,4 @@ BYTE fixmode_Changed = 0;
 BYTE satellitesInView_Changed = 0;
 
 BYTE instructionCount = 0x00;
-int fooCounter = 0;
 char str[50];

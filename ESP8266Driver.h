@@ -1,5 +1,8 @@
 // ESP8266 Helper Functions and Driver for PIC32
 
+//#include "variableDefs.h"
+
+
 // Copyleft midnightwarrior, 20 February 2015
 // Initial public release: v15.02b20a
 // Version v15.02b20a
@@ -39,18 +42,62 @@ int isWiFiResponding(void) {
 }
 
 int retrieveNetworkList(void) {
+    char *temp_token;
+    char stuff[50];
+    int networkNumber = 0;
+    //while(1) {
+
     if(isWiFiResponding) {
         // The ESP8266 is responding to an AT command, so it's awake and ready to go
         // Send AT+CWLAP to get network list
         memset(visibleNetworks,0,sizeof(WiFiNetwork));
+        //receiveWiFiData();
+        //scrollingTerminal(WiFiBuffer);
         printf("AT+CWLAP\r\n");
-        while(!is_WiFi_data_ready()) {
+        while(is_WiFi_data_ready()) {
            receiveWiFiData();
+           //scrollingTerminal(WiFiBuffer);
            // Parse data - see if it's valid
-           
+           char *temp_token = strtok_single(WiFiBuffer, "(");
+           snprintf(str,10,"%s",temp_token);
+           //scrollingTerminal("This is what split:");
+           //scrollingTerminal(str);
+           if(strcmp(str, "+CWLAP:") == 0) {
+               // There was a network!
+               // Do more splitting; separate out actual information
+               temp_token = strtok_single(NULL, ",");
+               snprintf(str,10,"%s",temp_token);
+               visibleNetworks[networkNumber].security = atoi(str);
+               temp_token = strtok_single(NULL, ",");
+               snprintf(str,33,"%s",temp_token);
+               strcpy(visibleNetworks[networkNumber].APName, str);
+               temp_token = strtok_single(NULL, ",");
+               snprintf(str,10,"%s",temp_token);
+               visibleNetworks[networkNumber].RSSI = atoi(str);
+               // Get MAC address
+               temp_token = strtok_single(NULL, "\",");
+               snprintf(str,18,"%s",temp_token);
+               strcpy(visibleNetworks[networkNumber].MACAddress, str);
+               // Get channel number
+               temp_token = strtok_single(NULL, ",)");
+               snprintf(str,10,"%s",temp_token);
+               visibleNetworks[networkNumber].channelNumber = atoi(str);
+
+               scrollingTerminal(visibleNetworks[networkNumber].MACAddress);
+               networkNumber++;
+
+               //scrollingTerminal(("BOOM! %d", a));
+           }
+           else if(strcmp(str, "busy p...") == 0) {
+               return;
+           }
         }
+        snprintf(stuff, 20, "Networks visible: %d", networkNumber);
+        scrollingTerminal(stuff);
+
     }
     else {
         return 0;
     }
 }
+//}
