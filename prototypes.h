@@ -34,3 +34,11 @@ char WiFi_getchar(void);
 void displayScrollingTerminal(void);
 void clearWiFiBuffer(void);
 void receiveWiFiData(void);
+
+// Averaging
+
+void initAveraging(void);
+int addToAveragingList(void);
+
+// Haversine function from rosettacode.org
+double dist(double, double, double, double);

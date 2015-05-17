@@ -62,6 +62,7 @@ int retrieveNetworkList(void) {
            snprintf(str,10,"%s",temp_token);
            //scrollingTerminal("This is what split:");
            //scrollingTerminal(str);
+           //scrollingTerminal(WiFiBuffer);
            if(strcmp(str, "+CWLAP:") == 0) {
                // There was a network!
                // Do more splitting; separate out actual information
@@ -85,12 +86,11 @@ int retrieveNetworkList(void) {
 
                scrollingTerminal(visibleNetworks[networkNumber].MACAddress);
                networkNumber++;
-
-               //scrollingTerminal(("BOOM! %d", a));
+               scrollingTerminal(("BOOM! %d", networkNumber));
            }
-           else if(strcmp(str, "busy p...") == 0) {
-               return;
-           }
+//           else if(strcmp(str, "busy p...") == 0) {
+//               return;
+//           }
         }
         snprintf(stuff, 20, "Networks visible: %d", networkNumber);
         scrollingTerminal(stuff);

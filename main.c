@@ -37,7 +37,7 @@
 // menu system a little bit.
 
 // SET VERSION NUMBER HERE!
-char versionNumber[11] = "v15.02b24a";
+char versionNumber[11] = "v15.05b17a";
 
 void init(void) {
     SYSTEMConfig(SYS_FREQ, SYS_CFG_WAIT_STATES | SYS_CFG_PCACHE);
@@ -325,6 +325,15 @@ void loadScreenPage(void) {
                 //screenRefreshRate = 1;
                 //printf("AT+CWLAP\r\n");
                 break;
+        case 6: // GPS position averaging
+                GLCD_RenderText_writeBytes(0,0,"Position Averaging",1);
+                GLCD_RenderText_writeBytes(0,2,"Please keep receiver",1);
+                GLCD_RenderText_writeBytes(0,3,"stationary while    ",1);
+                GLCD_RenderText_writeBytes(0,4,"taking measurements",1);
+
+                initAveraging();
+
+            break;
 
     }
 }
@@ -514,6 +523,45 @@ void displayGPSData(void) {
                 //}
                 
                 break;
+            case 6: // Do position averaging to get an ultra-accurate position
+                    // This will store 60 position fixes in an array and calculate
+                    // the averaged position and accuracy.
+                if(time_Changed) {
+                    avFuncResult = addToAveragingList();
+                    if(avFuncResult == -1) {
+                        GLCD_RenderText(0,57,"Fix invalid!   ");
+                    }
+                    if(avFuncResult == 1) {
+                        GLCD_RenderText(0,57,"Fix valid!     ");
+                        snprintf(str,30,"%i fixes                               ",positionsInList);
+                        GLCD_RenderText_writeBytes(0,5,str,1);
+                    }
+                    if(avFuncResult == 2) {
+                        GLCD_RenderText(0,57,"Avg calculated!");
+                    }
+                    if(averagingReady) {
+                        GLCD_ON();
+                        GLCD_CLR();
+                        GLCD_RenderText(0,57,"Avg calculated!");
+                        GLCD_RenderText_writeBytes(0,0,"Averaged position:",1);
+                        GLCD_RenderText_writeBytes(0,1,"Lat:",1);
+                        GLCD_RenderText_writeBytes(0,2,"Long:",1);
+                        GLCD_RenderText_writeBytes(0,3,"Within_NS:",1);
+                        GLCD_RenderText_writeBytes(0,4,"Within_WE:",1);
+                        snprintf(str,15,"%.6f           ",averageLat);
+                        GLCD_RenderText_writeBytes(31,1,str,1);
+                        snprintf(str,15,"%.6f           ",averageLong);
+                        GLCD_RenderText_writeBytes(31,2,str,1);
+                        snprintf(str,15,"%.2f",nsDistance);
+                        GLCD_RenderText_writeBytes(64,3,str,1);
+                        snprintf(str,15,"%.2f",weDistance);
+                        GLCD_RenderText_writeBytes(64,4,str,1);
+
+                    }
+                }
+
+                return;
+
         }
 }
 
@@ -945,4 +993,75 @@ char WiFi_getchar(void) {
 
 void clearWiFiBuffer(void) {
     memset(&RXQ_WiFi, 0, sizeof(Queue));
+}
+
+void initAveraging(void){
+    averagingReady = 0;
+    positionsInList = 0;
+    memset(positionsList, 0, sizeof(positionsList[0][0]) * positionListSize * 2);
+}
+int addToAveragingList(void){
+    int listPos;
+    float tempLat, tempLong = 0;
+    float minLat = 90;
+    float maxLat = 0;
+    float minLong = 180;
+    float maxLong = 0;
+
+    // Check to see if there's a valid fix
+    if(fixValid) {
+        if(positionsInList < positionListSize) {
+            // Convert lat and long to decimal
+            positionsList[positionsInList][0] = copysign((latitude[1]/60.0) + abs(latitude[0]), latitude[0]);
+            positionsList[positionsInList][1] = copysign((longitude[1]/60.0) + abs(longitude[0]), longitude[0]);
+            positionsInList++;
+            return 1;
+        }
+
+        // Position buffer is full - take an average!
+        for(listPos=0;listPos<positionListSize;listPos++) {
+            tempLat += positionsList[listPos][0];
+            tempLong += positionsList[listPos][1];
+
+            // Find max and min lat/long
+            if(abs(positionsList[listPos][0]) > maxLat) {
+                maxLat = positionsList[listPos][0];
+            }
+            if(abs(positionsList[listPos][0]) < minLat) {
+                minLat = positionsList[listPos][0];
+            }
+            if(abs(positionsList[listPos][1]) > maxLong) {
+                maxLong = positionsList[listPos][1];
+            }
+            if(abs(positionsList[listPos][1]) < minLong) {
+                minLong = positionsList[listPos][1];
+            }
+        }
+        averageLat = tempLat / positionListSize;
+        averageLong = tempLong / positionListSize;
+
+        // Calculate size of square that the position could be in
+
+        nsDistance = (dist(minLat, minLong, minLat, maxLong)/2.0)*1000;
+        weDistance = (dist(minLat, minLong, maxLat, minLong)/2.0)*1000;
+
+        averagingReady = 1;
+        return 2;
+    }
+    if(!fixValid) {
+        return -1;
+    }
+}
+
+// Haversine formula - from rosettacode.org
+double dist(double th1, double ph1, double th2, double ph2)
+{
+	double dx, dy, dz;
+	ph1 -= ph2;
+	ph1 *= TO_RAD, th1 *= TO_RAD, th2 *= TO_RAD;
+
+	dz = sin(th1) - sin(th2);
+	dx = cos(ph1) * cos(th1) - cos(th2);
+	dy = sin(ph1) * cos(th1);
+	return asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * R;
 }

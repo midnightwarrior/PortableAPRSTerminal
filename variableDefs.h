@@ -39,8 +39,8 @@ typedef struct
 
 // This will hold the data from the ESP8266 WiFi module
 char WiFiBuffer[QUEUE_SIZE];
-int WiFiDataReady;
-int WiFiBufferPos;
+int WiFiDataReady = 0;
+int WiFiBufferPos = 0;
 
 // Create an array that can handle 64 simultaneous networks
 WiFiNetwork visibleNetworks[64];
@@ -51,7 +51,7 @@ Queue RXQ_WiFi, TXQ_WiFi;
 BYTE screenRefreshTimerPeriod = 0;
 BYTE screenPage = 5;
 BYTE loadNewScreenPage = 0;
-BYTE numberOfScreenPages = 5;
+BYTE numberOfScreenPages = 6;
 
 int time[3];
 int date[3];
@@ -100,3 +100,20 @@ BYTE satellitesInView_Changed = 0;
 
 BYTE instructionCount = 0x00;
 char str[50];
+
+// Global array of positions to be averaged
+#define positionListSize 180
+float positionsList[positionListSize][2];
+BYTE averagingReady = 0;
+BYTE positionsInList = 0;
+float averageLat = 0;
+float averageLong = 0;
+int avFuncResult = 0;
+
+// Defines for haversine function from rosettacode.org
+
+#define R 6371
+#define TO_RAD (3.1415926536 / 180)
+
+double nsDistance = 0;
+double weDistance = 0;
